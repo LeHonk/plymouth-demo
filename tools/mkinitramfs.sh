@@ -7,6 +7,10 @@
 # env:   DEMO_NAME PLUGINDIR THEME_DIR RUN_SECONDS KVER
 set -eu
 
+# plymouthd and modprobe live in sbin, which is not on a normal user's PATH
+# on Debian. Nothing here needs root: we only read them and copy into $BUILD.
+PATH=$PATH:/usr/local/sbin:/usr/sbin:/sbin
+
 BUILD=$1
 OUT=$2
 ROOT=$BUILD/initramfs
