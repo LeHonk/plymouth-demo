@@ -1,0 +1,10 @@
+[Plymouth Theme]
+Name=@DEMO_TITLE@
+Description=@DEMO_DESC@
+ModuleName=@DEMO_NAME@
+
+[demo]
+ThemeDir=@THEME_DIR@
+RenderWidth=@RENDER_W@
+RenderHeight=@RENDER_H@
+FPS=@FPS@
