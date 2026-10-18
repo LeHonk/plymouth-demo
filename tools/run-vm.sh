@@ -24,15 +24,25 @@ qemu-img create -q -f qcow2 -b "$(realpath "$BASE")" -F qcow2 "$RUN"
 rm -rf "$STAGE" && mkdir -p "$STAGE/plymouth-demo"
 tar -C "$REPO" --exclude=./build --exclude=./.git -cf - . | tar -C "$STAGE/plymouth-demo" -xf -
 
+# The cloud image puts a serial console on the kernel command line, which
+# makes plymouth fall back to its text "details" view unless told otherwise
+mkdir -p "$STAGE/grub"
+cat > "$STAGE/grub/99_plymouth_demo.cfg" <<'EOF'
+GRUB_CMDLINE_LINUX_DEFAULT="quiet splash plymouth.ignore-serial-consoles"
+GRUB_TIMEOUT=1
+EOF
+
 mkdir -p "$STAGE/hold"
 cat > "$STAGE/hold/hold.conf" <<EOF
 [Service]
 ExecStartPre=/bin/sleep $HOLD
 EOF
 
-virt-customize -a "$RUN" \
+virt-customize --no-network -a "$RUN" \
         --copy-in "$STAGE/plymouth-demo:/root" \
         --run-command "make -C /root/plymouth-demo install" \
+        --copy-in "$STAGE/grub/99_plymouth_demo.cfg:/etc/default/grub.d" \
+        --run-command "update-grub" \
         --run-command "plymouth-set-default-theme -R $DEMO_NAME" \
         --mkdir /etc/systemd/system/plymouth-quit.service.d \
         --copy-in "$STAGE/hold/hold.conf:/etc/systemd/system/plymouth-quit.service.d"

@@ -28,6 +28,7 @@ make run RUN_SECONDS=0          # run forever
 sudo apt install libguestfs-tools
 make vm          # once: Debian 13 cloud image + plymouth + toolchain
 make run-vm      # copy tree in, build + install there, boot through GRUB
+make clean-vm    # delete the VM image (make clean leaves it alone)
 ```
 
 `run-vm` builds the plugin **inside** the VM, because the plugin ABI follows the VM's plymouth version. It also holds the splash for `HOLD_SECONDS` (default 15) so the boot doesn't blow past it. To reuse an existing Debian qcow2 instead of downloading one, run `make vm BASE_IMAGE=/path/to/image.qcow2`.

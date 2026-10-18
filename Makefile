@@ -5,6 +5,7 @@
 #   make debug      same, with plymouthd debug log on this terminal
 #   make preview    run the demo in an SDL window (no Plymouth, fastest loop)
 #   make run-vm     real boot of a Debian VM with the theme installed
+#   make clean-vm   delete the VM image and its run files (make clean keeps them)
 #   sudo make install / uninstall
 #
 # Per-demo settings live in config.mk.
@@ -15,8 +16,12 @@ BUILD     := build
 SO        := $(BUILD)/$(DEMO_NAME).so
 THEME     := $(BUILD)/$(DEMO_NAME).plymouth
 
-# Plymouth headers: the system pkg-config file (libplymouth-dev) if present,
-# otherwise headers unpacked by `make plydev` (no root needed).
+# Plymouth headers, in order of preference:
+#  1. pkg-config (libplymouth-dev plus the -dev packages its .pc file
+#     requires: libevdev, xkbcommon, libudev)
+#  2. the system headers in /usr/include/plymouth-1 (libplymouth-dev alone;
+#     its pkg-config file fails without those extra -dev packages)
+#  3. headers unpacked by `make plydev` (no root needed)
 PLYDEV    := $(BUILD)/plydev
 ifeq ($(shell pkg-config --exists ply-splash-core && echo yes),yes)
 PLY_CFLAGS := $(shell pkg-config --cflags ply-splash-core)
@@ -24,7 +29,7 @@ PLY_LIBS   := $(shell pkg-config --libs ply-splash-core)
 PLUGINDIR  := $(shell pkg-config --variable=pluginsdir ply-splash-core)
 THEMESDIR  := $(shell pkg-config --variable=themesdir ply-splash-core)
 else
-PLYINC     := $(PLYDEV)/usr/include/plymouth-1
+PLYINC     := $(firstword $(wildcard /usr/include/plymouth-1) $(PLYDEV)/usr/include/plymouth-1)
 PLY_CFLAGS := -I$(PLYINC)/ply -I$(PLYINC)/ply-splash-core
 PLY_LIBS   :=       # symbols resolve against plymouthd at load time
 PLUGINDIR  := $(shell plymouth --get-splash-plugin-path 2>/dev/null || echo /usr/lib/plymouth)
@@ -41,7 +46,7 @@ CORE_SRCS := core/gfx.c core/font8x8.c core/dmath.c core/overlay.c
 DEMO_SRCS := $(wildcard demo/*.c)
 PLUGIN_OBJS := $(patsubst %.c,$(BUILD)/obj/%.o,core/plugin.c $(CORE_SRCS) $(DEMO_SRCS))
 
-.PHONY: all clean install uninstall run debug preview run-vm vm plydev initramfs FORCE
+.PHONY: all clean clean-vm install uninstall run debug preview run-vm vm plydev initramfs FORCE
 
 all: $(SO) $(THEME)
 
@@ -62,12 +67,12 @@ $(THEME): theme/demo.plymouth.in config.mk
 	    -e 's|@RENDER_W@|$(RENDER_W)|g' -e 's|@RENDER_H@|$(RENDER_H)|g' \
 	    -e 's|@FPS@|$(FPS)|g' $< > $@
 
-$(PLYINC):
+$(PLYDEV)/usr/include/plymouth-1:
 	@echo "libplymouth-dev not installed; fetching headers into $(PLYDEV) (no root needed)"
 	rm -rf $(PLYDEV) && mkdir -p $(PLYDEV)
 	cd $(PLYDEV) && apt-get download libplymouth-dev && dpkg-deb -x libplymouth-dev_*.deb .
 
-plydev: $(PLYINC)
+plydev: $(PLYDEV)/usr/include/plymouth-1
 
 install: all
 	install -d $(DESTDIR)$(PLUGINDIR) $(DESTDIR)$(THEME_DIR)
@@ -120,6 +125,10 @@ vm:
 
 run-vm:
 	DEMO_NAME=$(DEMO_NAME) tools/run-vm.sh $(BUILD)/vm
+
+# Separate from clean: the base image takes a download and a provisioning boot
+clean-vm:
+	rm -rf $(BUILD)/vm
 
 clean:
 	rm -rf $(BUILD)/obj $(BUILD)/initramfs $(SO) $(THEME) $(INITRAMFS) $(PREVIEW)
