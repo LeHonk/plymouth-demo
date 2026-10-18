@@ -80,7 +80,9 @@ $EDITOR demo/demo.c
 make preview
 ```
 
-Or by hand: `git clone` this repo, `git remote rename origin upstream`, and set `DEMO_NAME` in `config.mk`.
+Or by hand: `git clone` this repo, `git remote rename origin upstream`, `git config pull.rebase false`, and set `DEMO_NAME` in `config.mk`.
+
+To bring in later fixes from the base, run `git pull upstream main` in the fork. Forks merge rather than rebase, so their own commits keep their history. Without the `pull.rebase` setting, git stops with "Need to specify how to reconcile divergent branches" once both sides have commits. In a fork made before `new-demo.sh` set it, use `git pull --no-rebase upstream main` or run the `git config` line once.
 
 **Keep to the ownership split** so that `git pull upstream main` merges cleanly:
 
