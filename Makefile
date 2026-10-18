@@ -6,6 +6,9 @@
 #   make preview    run the demo in an SDL window (no Plymouth, fastest loop)
 #   make run-vm     real boot of a Debian VM with the theme installed
 #   make clean-vm   delete the VM image and its run files (make clean keeps them)
+#   make pxe        lightweight Debian live image for PXE boot (rootless mmdebstrap)
+#   make run-pxe    network-boot that image in QEMU
+#   make clean-pxe  delete the PXE image and its apt cache
 #   sudo make install / uninstall
 #
 # Per-demo settings live in config.mk.
@@ -46,7 +49,7 @@ CORE_SRCS := core/gfx.c core/font8x8.c core/dmath.c core/overlay.c
 DEMO_SRCS := $(wildcard demo/*.c)
 PLUGIN_OBJS := $(patsubst %.c,$(BUILD)/obj/%.o,core/plugin.c $(CORE_SRCS) $(DEMO_SRCS))
 
-.PHONY: all clean clean-vm install uninstall run debug preview run-vm vm plydev initramfs FORCE
+.PHONY: all clean clean-vm pxe run-pxe clean-pxe install uninstall run debug preview run-vm vm plydev initramfs FORCE
 
 all: $(SO) $(THEME)
 
@@ -129,6 +132,20 @@ run-vm:
 # Separate from clean: the base image takes a download and a provisioning boot
 clean-vm:
 	rm -rf $(BUILD)/vm
+
+# ---- PXE live image ----------------------------------------------------------
+
+PXE_SUITE  ?= trixie
+PXE_URL    ?= http://10.0.2.2:8080
+
+pxe:
+	DEMO_NAME=$(DEMO_NAME) PXE_SUITE=$(PXE_SUITE) PXE_URL=$(PXE_URL) tools/mkpxe.sh $(BUILD)/pxe
+
+run-pxe:
+	tools/run-pxe.sh $(BUILD)/pxe/out
+
+clean-pxe:
+	rm -rf $(BUILD)/pxe
 
 clean:
 	rm -rf $(BUILD)/obj $(BUILD)/initramfs $(SO) $(THEME) $(INITRAMFS) $(PREVIEW)

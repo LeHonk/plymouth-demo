@@ -33,6 +33,34 @@ make clean-vm    # delete the VM image (make clean leaves it alone)
 
 `run-vm` builds the plugin **inside** the VM, because the plugin ABI follows the VM's plymouth version. It also holds the splash for `HOLD_SECONDS` (default 15) so the boot doesn't blow past it. To reuse an existing Debian qcow2 instead of downloading one, run `make vm BASE_IMAGE=/path/to/image.qcow2`.
 
+### PXE live image
+
+A small Debian 13 live system for network boot, with the demo as its boot splash. It's built rootless with `mmdebstrap`.
+
+```sh
+sudo apt install mmdebstrap squashfs-tools
+make pxe PXE_URL=http://my-server/demo   # -> build/pxe/out/
+make run-pxe                             # network-boot it in QEMU (iPXE, TFTP + HTTP)
+make clean-pxe                           # delete the image and the apt cache
+```
+
+`build/pxe/out/` contains `vmlinuz` (12 MB), `initrd.img` (29 MB), `filesystem.squashfs` (88 MB) and a `boot.ipxe` that loads them from `PXE_URL`. Copy them to an HTTP server, then chain-load `boot.ipxe` from your DHCP/TFTP setup. The kernel command line is `boot=live fetch=<url>/filesystem.squashfs ip=dhcp quiet splash plymouth.ignore-serial-consoles`. The splash starts in the initrd, so it covers the squashfs download. iPXE fetches the kernel and initrd before that, so those show iPXE's own text screen.
+
+The booted system has root on a RAM overlay, DHCP via systemd-networkd, and a root console login with no password.
+
+How it stays small:
+- The plugin is compiled in a separate throwaway build chroot against the image's own plymouth, so the image carries no compiler or `-dev` packages.
+- Recommends, docs, man pages and locales are left out.
+- The initrd uses `MODULES=netboot` and xz compression. The splash in the initrd runs on the kernel's built-in EFI/VESA framebuffer, and the full GPU drivers load later from the root.
+- Kernel modules a diskless demo box doesn't need are removed: wireless, Bluetooth, media, sound, infiniband and similar. So are amdgpu, radeon, nouveau and xe, which need firmware packages the image doesn't ship. Loaded without firmware, they replace the working EFI framebuffer with a black screen.
+
+Settings, all passed to `make pxe`:
+- `PXE_PRUNE_MODULES`: subtrees of `kernel/` to remove. Set it to `""` to keep every module, and add e.g. `firmware-amd-graphics` to the package list in `tools/mkpxe.sh` if you need AMD KMS.
+- `PXE_INITRD_MODULES`: initramfs-tools `MODULES=` value.
+- `PXE_SUITE`, `PXE_MIRROR`: Debian release and mirror.
+
+Downloaded packages are cached in `build/pxe/apt-cache`, so rebuilds take under a minute.
+
 ### Installing on a real machine
 
 ```sh
