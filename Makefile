@@ -9,6 +9,7 @@
 #   make pxe        lightweight Debian live image for PXE boot (rootless mmdebstrap)
 #   make run-pxe    network-boot that image in QEMU
 #   make clean-pxe  delete the PXE image and its apt cache
+#   make compdb     write compile_commands.json for clangd (Zed, VS Code, ...)
 #   sudo make install / uninstall
 #
 # Per-demo settings live in config.mk.
@@ -49,7 +50,7 @@ CORE_SRCS := core/gfx.c core/font8x8.c core/dmath.c core/overlay.c
 DEMO_SRCS := $(wildcard demo/*.c)
 PLUGIN_OBJS := $(patsubst %.c,$(BUILD)/obj/%.o,core/plugin.c $(CORE_SRCS) $(DEMO_SRCS))
 
-.PHONY: all clean clean-vm pxe run-pxe clean-pxe install uninstall run debug preview run-vm vm plydev initramfs FORCE
+.PHONY: all clean clean-vm pxe run-pxe clean-pxe install uninstall run debug preview run-vm vm plydev initramfs compdb FORCE
 
 all: $(SO) $(THEME)
 
@@ -110,16 +111,35 @@ debug: $(INITRAMFS)
 # ---- SDL previewer ---------------------------------------------------------
 
 PREVIEW := $(BUILD)/preview
+PREVIEW_CFLAGS = -std=gnu11 -O2 -g -Wall -Wextra -Icore \
+    -DRENDER_W=$(RENDER_W) -DRENDER_H=$(RENDER_H) -DFPS=$(FPS) \
+    $(shell pkg-config --cflags sdl2 2>/dev/null)
 
 $(PREVIEW): preview/sdl_main.c $(CORE_SRCS) $(DEMO_SRCS) core/*.h config.mk
 	@mkdir -p $(BUILD)
-	$(CC) -std=gnu11 -O2 -g -Wall -Wextra -Icore \
-	    -DRENDER_W=$(RENDER_W) -DRENDER_H=$(RENDER_H) -DFPS=$(FPS) \
+	$(CC) $(PREVIEW_CFLAGS) \
 	    -o $@ preview/sdl_main.c $(CORE_SRCS) $(DEMO_SRCS) \
-	    $$(pkg-config --cflags --libs sdl2) -lm
+	    $$(pkg-config --libs sdl2) -lm
 
 preview: $(PREVIEW)
 	$(PREVIEW)
+
+# ---- clangd compilation database --------------------------------------------
+
+# Same flags as the real build; regenerate after changing them or adding files.
+# core/ and demo/ use the plugin flags, preview/ the SDL previewer flags.
+compdb: compile_commands.json
+
+compile_commands.json: Makefile config.mk FORCE | $(if $(PLYINC),$(PLYINC))
+	@{ echo '['; \
+	   for f in core/plugin.c $(CORE_SRCS) $(DEMO_SRCS); do \
+	     printf '  {"directory": "%s", "file": "%s", "command": "%s -c %s"},\n' \
+	       '$(CURDIR)' "$$f" '$(CC) $(CFLAGS) $(PLY_CFLAGS) -DPLY_ENABLE_TRACING' "$$f"; \
+	   done; \
+	   printf '  {"directory": "%s", "file": "%s", "command": "%s -c %s"}\n' \
+	     '$(CURDIR)' preview/sdl_main.c '$(CC) $(PREVIEW_CFLAGS)' preview/sdl_main.c; \
+	   echo ']'; } > $@
+	@echo "Wrote $@; restart the language server to pick it up"
 
 # ---- Full Debian VM ---------------------------------------------------------
 
